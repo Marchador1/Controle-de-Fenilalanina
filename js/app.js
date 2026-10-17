@@ -208,7 +208,7 @@ async function renderHoje() {
     return '<div class="refeicao">' +
       '<div class="refeicao-cab"><h2>' + esc(ref) + '<span class="detalhe">' + sub + '</span></h2>' +
       '<div class="refeicao-acoes">' +
-      (!itens.length && temOntem ? '<button type="button" class="btn pequeno" data-repetir="' + esc(ref) + '">Repetir de ontem</button>' : '') +
+      (!itens.length && temOntem ? '<button type="button" class="btn pequeno fantasma" data-repetir="' + esc(ref) + '">↻ Repetir ontem</button>' : '') +
       '<button type="button" class="btn pequeno primario" data-adicionar="' + esc(ref) + '">+ Adicionar</button>' +
       '</div></div>' +
       (itens.length

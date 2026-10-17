@@ -44,7 +44,7 @@ A tabela é voltada a produtos industrializados e alimentos in natura de baixo t
 
 | Arquivo | Papel |
 |---|---|
-| `index.html`, `css/style.css` | Telas e estilo (responsivo, letras grandes, tema escuro automático) |
+| `index.html`, `css/style.css` | Telas e estilo (responsivo, letras grandes, tema claro) |
 | `js/app.js` | Interface |
 | `js/model.js` | Regras puras: cálculo de mg, estimativa, situação do dia, mesclagem |
 | `js/db.js` | IndexedDB (alimentos, registros, perfis, config) |
