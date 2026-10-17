@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do app para funcionar sem internet.
 // Ao incluir ou renomear arquivos, atualize a lista e aumente a VERSAO.
-const VERSAO = 'phe-v2';
+const VERSAO = 'phe-v3';
 const ARQUIVOS = [
   './',
   'index.html',

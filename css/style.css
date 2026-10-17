@@ -26,6 +26,7 @@
 
 * { box-sizing: border-box; }
 a { color: var(--primaria); }
+[hidden] { display: none !important; }
 
 html { font-size: 18px; }
 
@@ -161,3 +162,18 @@ label.campo input, label.campo select { margin-top: 4px; color: var(--texto); }
   background: var(--texto); color: var(--fundo); padding: 10px 16px; border-radius: var(--raio);
   font-size: .9rem; z-index: 20; max-width: calc(100% - 32px);
 }
+
+/* Quantidade com unidade no campo e atalhos de gramas */
+.com-sufixo { position: relative; display: block; margin-top: 4px; }
+.com-sufixo input { margin-top: 0; padding-right: 36px; }
+.sufixo { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--texto-suave); pointer-events: none; }
+.atalhos { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 8px; }
+.atalhos[hidden] { display: none; }
+
+/* Botão de editar visível em cada alimento */
+.btn-editar {
+  flex: none; display: flex; flex-direction: column; align-items: center; gap: 0; font: inherit; font-size: 1.1rem;
+  background: none; border: 1px solid var(--borda); border-radius: var(--raio); color: var(--primaria);
+  padding: 4px 8px; min-width: 52px; cursor: pointer;
+}
+.btn-editar span { font-size: .65rem; }

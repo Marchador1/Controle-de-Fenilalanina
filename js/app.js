@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import {
-  REFEICOES, FONTES, novoId, agoraIso, dataLocal, horaLocal, somarDias, arredondar,
+  REFEICOES, novoId, agoraIso, dataLocal, horaLocal, somarDias, arredondar,
   normalizarAlimento, calcularPhe, situacaoDoDia, totalPhe, mesclar, buscarTexto, semAcento
 } from './model.js';
 import { carregarBaseAnvisa, NOMES_EXEMPLO } from './seed.js';
@@ -267,9 +267,14 @@ async function modalRegistro(registro, refeicaoPadrao) {
     '<div id="area-qtd" hidden>' +
       '<div class="escolhido" id="f-escolhido"></div>' +
       '<div class="linha">' +
-        '<label class="campo">Quantidade<input type="number" id="f-qtd" inputmode="decimal" min="0" step="any"></label>' +
-        '<label class="campo">Unidade<select id="f-unidade"></select></label>' +
+        '<label class="campo"><span id="f-qtd-rotulo">Quantidade em gramas</span>' +
+          '<span class="com-sufixo"><input type="number" id="f-qtd" inputmode="decimal" min="0" step="any" placeholder="ex.: 75">' +
+          '<span class="sufixo" id="f-sufixo">g</span></span></label>' +
+        '<label class="campo" id="f-unidade-campo" hidden>Medida<select id="f-unidade"></select></label>' +
       '</div>' +
+      '<div class="atalhos" id="f-atalhos">' + [25, 50, 75, 100, 150, 200].map(function (g) {
+        return '<button type="button" class="btn pequeno" data-gramas="' + g + '">' + g + ' g</button>';
+      }).join('') + '</div>' +
       '<p class="previa" id="f-previa"></p>' +
       '<div class="linha">' +
         '<label class="campo">Refeição<select id="f-refeicao">' +
@@ -330,7 +335,9 @@ async function modalRegistro(registro, refeicaoPadrao) {
       $('#area-busca').hidden = false; $('#area-qtd').hidden = true; $('#f-salvar').hidden = true;
       $('#f-busca').focus();
     };
+    // A escolha de medida só aparece quando o alimento tem porção cadastrada; senão é sempre em gramas.
     const temPorcao = a.porcaoG > 0;
+    $('#f-unidade-campo').hidden = !temPorcao;
     $('#f-unidade').innerHTML = '<option value="g">gramas</option>' +
       (temPorcao ? '<option value="porcao">' + esc(a.porcaoNome || 'porção') + ' (' + fmt(a.porcaoG) + ' g)</option>' : '');
     if (editando) {
@@ -340,8 +347,17 @@ async function modalRegistro(registro, refeicaoPadrao) {
       $('#f-unidade').value = temPorcao ? 'porcao' : 'g';
       $('#f-qtd').value = temPorcao ? 1 : '';
     }
-    atualizarPrevia();
+    atualizarUnidade();
     $('#f-qtd').focus();
+  }
+
+  function atualizarUnidade() {
+    const porcao = $('#f-unidade').value === 'porcao';
+    $('#f-qtd-rotulo').textContent = porcao ? 'Quantidade de porções' : 'Quantidade em gramas';
+    $('#f-sufixo').textContent = porcao ? '×' : 'g';
+    $('#f-qtd').placeholder = porcao ? 'ex.: 1' : 'ex.: 75';
+    $('#f-atalhos').hidden = porcao;
+    atualizarPrevia();
   }
 
   function gramas() {
@@ -354,7 +370,10 @@ async function modalRegistro(registro, refeicaoPadrao) {
 
   $('#f-busca').addEventListener('input', listar);
   $('#f-qtd').addEventListener('input', atualizarPrevia);
-  $('#f-unidade').addEventListener('change', atualizarPrevia);
+  $('#f-unidade').addEventListener('change', function () { $('#f-qtd').value = ''; atualizarUnidade(); $('#f-qtd').focus(); });
+  $('#f-atalhos').querySelectorAll('[data-gramas]').forEach(function (b) {
+    b.onclick = function () { $('#f-qtd').value = b.getAttribute('data-gramas'); atualizarPrevia(); };
+  });
 
   $('#f-salvar').onclick = async function () {
     const g = gramas();
@@ -412,7 +431,8 @@ function renderAlimentos() {
       '<div class="detalhe">' + esc([a.marca, categoriaCurta(a.categoria)].filter(Boolean).join(' · ')) +
       (a.porcaoG ? ' · ' + esc(a.porcaoNome || 'porção') + ' = ' + fmt(a.porcaoG) + ' g' : '') + ' ' +
       (a.fonte === 'tabela' ? '' : '<span class="selo' + (a.fonte === 'estimativa' ? ' estimativa' : '') + '">' + (a.fonte === 'estimativa' ? 'estimado' : 'rótulo') + '</span>') + '</div></div>' +
-      '<div class="valor">' + fmt(a.pheMg100) + '<span class="detalhe"> mg/100 g</span></div></li>';
+      '<div class="valor clicavel" data-editar="' + a.id + '">' + fmt(a.pheMg100) + '<span class="detalhe"> mg/100 g</span></div>' +
+      '<button type="button" class="btn-editar" data-editar="' + a.id + '" aria-label="Editar ' + esc(a.nome) + '">✎<span>Editar</span></button></li>';
   }).join('') + avisoLimite(lista.length) : '<li class="vazio">Nenhum alimento encontrado.</li>';
 
   $('#lista-alimentos').querySelectorAll('[data-editar]').forEach(function (el) {
@@ -443,9 +463,6 @@ function modalAlimento(a) {
       '<label class="campo">Proteína (g/100 g)<input id="a-prot" type="number" inputmode="decimal" min="0" step="any" value="' + (ed.proteinaG100 === undefined || ed.proteinaG100 === null ? '' : ed.proteinaG100) + '"></label>' +
     '</div>' +
     '<p class="ajuda">Sem o teor de fenilalanina, o app estima pela proteína (× 50 mg) e marca como estimado.</p>' +
-    '<label class="campo">Fonte do dado<select id="a-fonte">' + Object.keys(FONTES).map(function (k) {
-      return '<option value="' + k + '"' + ((ed.fonte || 'rotulo') === k ? ' selected' : '') + '>' + FONTES[k] + '</option>';
-    }).join('') + '</select></label>' +
     '<div class="linha">' +
       '<label class="campo">Porção padrão<input id="a-porcao" placeholder="ex.: 1 fatia" value="' + esc(ed.porcaoNome) + '"></label>' +
       '<label class="campo">Gramas da porção<input id="a-porcao-g" type="number" inputmode="decimal" min="0" step="any" value="' + (ed.porcaoG || '') + '"></label>' +
@@ -456,16 +473,18 @@ function modalAlimento(a) {
       '<button type="button" class="btn primario" id="a-salvar">Salvar</button>' +
     '</div>');
 
-  // Ao editar só a proteína de um item estimado, o teor precisa ser recalculado.
+  // A fonte do dado é definida sozinha: mantém a original se o teor não mudou, vira "rótulo" se o
+  // usuário digitou o teor e "estimativa" se só informou a proteína.
   const pheOriginal = ed.pheMg100;
   $('#a-salvar').onclick = async function () {
     let phe = $('#a-phe').value;
-    if (ed.fonte === 'estimativa' && $('#a-fonte').value === 'estimativa' && String(phe) === String(pheOriginal) &&
-        $('#a-prot').value !== String(ed.proteinaG100)) phe = '';
+    const pheMudou = String(phe) !== String(pheOriginal === undefined || pheOriginal === null ? '' : pheOriginal);
+    if (ed.fonte === 'estimativa' && !pheMudou && $('#a-prot').value !== String(ed.proteinaG100)) phe = '';
+    const fonte = a && !pheMudou ? ed.fonte : 'rotulo';
     try {
       const novo = normalizarAlimento({
         nome: $('#a-nome').value, categoria: $('#a-categoria').value, marca: $('#a-marca').value,
-        pheMg100: phe, proteinaG100: $('#a-prot').value, fonte: $('#a-fonte').value,
+        pheMg100: phe, proteinaG100: $('#a-prot').value, fonte: fonte,
         porcaoNome: $('#a-porcao').value, porcaoG: $('#a-porcao-g').value
       }, a);
       await db.salvar('alimentos', novo);
