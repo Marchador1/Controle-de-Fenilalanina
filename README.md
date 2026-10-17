@@ -22,7 +22,9 @@ npm test
 
 - **Hoje:** registro por refeição (busca, favoritos, recentes, gramas ou porções), total do dia, quanto falta e barra verde/amarelo/vermelho em relação ao limite; editar, excluir e "repetir de ontem"; navegação entre dias.
 - **Alimentos:** cadastrar, editar, excluir e favoritar. Sem o teor de Phe, o app estima pela proteína (× 50 mg/g) e marca como estimado.
-- **Perfil e dados:** vários perfis com limite diário próprio; exportar e importar backup em JSON com mesclagem pela data de alteração (vale a versão mais recente de cada item; exclusões também são levadas).
+- **Relatórios:** semana, mês, trimestre, semestre e ano, com média diária (só dos dias registrados), % do limite, dias acima do limite, maior e menor consumo, gráfico por dia (ou média por mês nos períodos longos), alimentos que mais contribuíram e lista de dias. "Gerar PDF" abre a impressão do navegador, onde se escolhe "Salvar como PDF".
+- **Perfil:** vários perfis com limite diário próprio; criar, editar e excluir (excluir apaga o histórico do perfil).
+- **Planilhas:** backup completo em Excel (.xlsx, abas Alimentos, Registros, Perfis e Instruções) e importação com mesclagem pela data de alteração (vale a versão mais recente de cada item; exclusões também são levadas). Modelo de planilha para cadastrar vários alimentos de uma vez. Backups antigos em JSON ainda são aceitos. A leitura e a gravação de .xlsx são feitas por `js/xlsx.js`, sem bibliotecas.
 
 ## Base pré-cadastrada (ANVISA)
 
@@ -46,6 +48,7 @@ A tabela é voltada a produtos industrializados e alimentos in natura de baixo t
 | `js/app.js` | Interface |
 | `js/model.js` | Regras puras: cálculo de mg, estimativa, situação do dia, mesclagem |
 | `js/db.js` | IndexedDB (alimentos, registros, perfis, config) |
+| `js/xlsx.js`, `js/planilha.js` | Gerar e ler planilhas Excel; colunas do backup e do modelo |
 | `js/seed.js`, `data/anvisa.json` | Base pré-cadastrada da ANVISA |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalação e funcionamento offline |
 | `tools/serve.mjs` | Servidor local; `tools/make-icons.mjs` gera os PNG; `tools/importar-anvisa.mjs` baixa a base |

@@ -20,6 +20,7 @@
   </header>
 
   <main>
+    <div class="so-impressao" id="cabecalho-impressao"></div>
     <!-- Tela: consumo do dia -->
     <section id="tela-hoje" class="tela ativa" aria-label="Consumo do dia">
       <div class="navegar-dia">
@@ -42,6 +43,20 @@
       <div id="lista-refeicoes"></div>
     </section>
 
+    <!-- Tela: relatórios -->
+    <section id="tela-relatorios" class="tela" aria-label="Relatórios">
+      <div class="seletor-periodo nao-imprimir" role="tablist" id="tipos-periodo"></div>
+      <div class="navegar-dia nao-imprimir">
+        <button type="button" id="periodo-anterior" class="btn-icone" aria-label="Período anterior">‹</button>
+        <div class="dia-titulo" id="periodo-titulo"></div>
+        <button type="button" id="periodo-seguinte" class="btn-icone" aria-label="Período seguinte">›</button>
+      </div>
+      <div id="relatorio"></div>
+      <div class="acoes nao-imprimir">
+        <button type="button" class="btn primario" id="gerar-pdf">Gerar PDF do relatório</button>
+      </div>
+    </section>
+
     <!-- Tela: base de alimentos -->
     <section id="tela-alimentos" class="tela" aria-label="Base de alimentos">
       <div class="barra-busca">
@@ -61,13 +76,24 @@
       </div>
       <div class="cartao">
         <h2>Backup e sincronização</h2>
-        <p class="ajuda">Os dados ficam só neste aparelho. Para levar ao PC ou a outro celular, exporte o arquivo e importe no outro aparelho. A importação mescla as bases e mantém a versão mais recente de cada item.</p>
+        <p class="ajuda">Os dados ficam só neste aparelho. Para levar ao PC ou a outro celular, exporte a planilha e importe no outro aparelho. A importação junta as bases e mantém a versão mais recente de cada item; nada é apagado.</p>
         <div class="acoes">
-          <button type="button" class="btn primario" id="exportar">Exportar backup</button>
-          <label class="btn" for="importar-arquivo">Importar backup</label>
-          <input type="file" id="importar-arquivo" accept=".json,application/json" hidden>
+          <button type="button" class="btn primario" id="exportar">Exportar planilha (Excel)</button>
+          <label class="btn" for="importar-arquivo">Importar planilha</label>
+          <input type="file" id="importar-arquivo" accept=".xlsx,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/json" hidden>
         </div>
         <p class="ajuda" id="ultimo-backup"></p>
+      </div>
+      <div class="cartao">
+        <h2>Cadastrar vários alimentos por planilha</h2>
+        <p class="ajuda">Baixe o modelo, preencha uma linha por alimento e importe em "Importar planilha". Colunas:</p>
+        <ul class="colunas-modelo">
+          <li><strong>Nome</strong> (obrigatório), <strong>Marca</strong> e <strong>Categoria</strong></li>
+          <li><strong>Fenilalanina (mg/100 g)</strong>; se não souber, preencha <strong>Proteína (g/100 g)</strong> e o app estima</li>
+          <li><strong>Porção</strong> e <strong>Gramas da porção</strong> (opcionais), ex.: 1 fatia = 25</li>
+        </ul>
+        <p class="ajuda">Alimento com o mesmo nome e marca de um já cadastrado é atualizado, não duplicado.</p>
+        <button type="button" class="btn" id="baixar-modelo">Baixar modelo de planilha</button>
       </div>
     </section>
   </main>
@@ -76,8 +102,9 @@
 
   <nav class="abas" aria-label="Telas">
     <button type="button" data-tela="tela-hoje" class="ativa">Hoje</button>
+    <button type="button" data-tela="tela-relatorios">Relatórios</button>
     <button type="button" data-tela="tela-alimentos">Alimentos</button>
-    <button type="button" data-tela="tela-dados">Perfil e dados</button>
+    <button type="button" data-tela="tela-dados">Perfil</button>
   </nav>
 
   <div id="modal" class="modal" hidden>

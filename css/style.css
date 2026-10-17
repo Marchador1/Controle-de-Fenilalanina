@@ -134,7 +134,7 @@ label.campo input, label.campo select { margin-top: 4px; color: var(--texto); }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .abas button {
-  flex: 1; font: inherit; font-size: .9rem; padding: 14px 4px; border: 0; background: none;
+  flex: 1; font: inherit; font-size: .82rem; padding: 14px 2px; border: 0; background: none;
   color: var(--texto-suave); cursor: pointer; border-top: 3px solid transparent;
 }
 .abas button.ativa { color: var(--primaria); border-top-color: var(--primaria); font-weight: 600; }
@@ -177,3 +177,55 @@ label.campo input, label.campo select { margin-top: 4px; color: var(--texto); }
   padding: 4px 8px; min-width: 52px; cursor: pointer;
 }
 .btn-editar span { font-size: .65rem; }
+
+/* Relatórios */
+.seletor-periodo { display: flex; gap: 4px; background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 4px; margin-bottom: 12px; overflow-x: auto; }
+.seletor-periodo button { flex: 1; font: inherit; font-size: .85rem; padding: 8px 6px; border: 0; border-radius: 8px; background: none; color: var(--texto-suave); cursor: pointer; white-space: nowrap; }
+.seletor-periodo button.ativa { background: var(--primaria); color: var(--primaria-texto); font-weight: 600; }
+.btn-icone:disabled { opacity: .35; cursor: default; }
+.indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.indicador { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 12px 14px; border-left: 5px solid var(--borda); }
+.indicador strong { display: block; font-size: 1.35rem; margin: 2px 0; }
+.indicador .detalhe { display: block; font-size: .75rem; color: var(--texto-suave); }
+.indicador.nivel-ok { border-left-color: var(--ok); }
+.indicador.nivel-atencao { border-left-color: var(--atencao); }
+.indicador.nivel-acima { border-left-color: var(--acima); }
+.grafico { width: 100%; height: auto; display: block; }
+.grafico .grade { stroke: var(--borda); stroke-width: 1; }
+.grafico .eixo { fill: var(--texto-suave); font-size: 12px; }
+.grafico .linha-limite { stroke: var(--texto); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.grafico .barra-ok { fill: var(--ok); }
+.grafico .barra-atencao { fill: var(--atencao); }
+.grafico .barra-acima { fill: var(--acima); }
+.legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--texto-suave); margin-top: 6px; }
+.legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.ponto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; background: var(--borda); vertical-align: middle; }
+.ponto.nivel-ok { background: var(--ok); }
+.ponto.nivel-atencao { background: var(--atencao); }
+.ponto.nivel-acima { background: var(--acima); }
+.legenda .ponto { margin-right: 0; }
+.traco { display: inline-block; width: 18px; border-top: 2px dashed var(--texto); }
+.tabela { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.tabela th, .tabela td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borda); }
+.tabela th { color: var(--texto-suave); font-weight: 600; }
+.tabela .num { text-align: right; white-space: nowrap; }
+.colunas-modelo { margin: 0 0 10px; padding-left: 20px; font-size: .85rem; }
+.colunas-modelo li { margin-bottom: 4px; }
+.so-impressao { display: none; }
+
+/* Impressão / PDF do relatório */
+@media print {
+  :root { --fundo: #fff; --superficie: #fff; --texto: #000; --texto-suave: #444; --borda: #ccc; }
+  html { font-size: 12px; }
+  body { padding: 0; background: #fff; }
+  .topo, .abas, .aviso, .nao-imprimir, .toast, .modal, .tela:not(#tela-relatorios) { display: none !important; }
+  #tela-relatorios { display: block !important; padding: 0; }
+  .so-impressao { display: block; margin-bottom: 10px; }
+  .so-impressao h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  main { max-width: none; padding: 0; }
+  .cartao, .indicador { break-inside: avoid; }
+  .tabela tr { break-inside: avoid; }
+  .indicadores { grid-template-columns: repeat(3, 1fr); }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+@media print { body::after { content: "Este relatório é um apoio e não substitui a orientação da equipe de saúde."; display: block; margin-top: 12px; font-size: 10px; color: #444; } }

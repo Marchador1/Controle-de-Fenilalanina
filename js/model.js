@@ -127,3 +127,88 @@ export function buscarTexto(alimento) {
 export function semAcento(s) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
+
+// ---------- Relatórios ----------
+
+export const PERIODOS = { semana: 'Semana', mes: 'Mês', trimestre: 'Trimestre', semestre: 'Semestre', ano: 'Ano' };
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+function partes(dataStr) {
+  const p = dataStr.split('-').map(Number);
+  return { a: p[0], m: p[1], d: p[2] };
+}
+
+function formatarCurta(dataStr) {
+  const p = partes(dataStr);
+  return doisDigitos(p.d) + '/' + doisDigitos(p.m) + '/' + p.a;
+}
+
+// Período que contém a data de referência, deslocado em "passo" períodos (-1 = anterior).
+// A semana vai de segunda a domingo.
+export function periodo(tipo, refStr, passo) {
+  const p = partes(refStr);
+  passo = passo || 0;
+  let ini, fim, titulo;
+  if (tipo === 'semana') {
+    const d = new Date(p.a, p.m - 1, p.d);
+    const dow = (d.getDay() + 6) % 7;
+    ini = somarDias(refStr, -dow + passo * 7);
+    fim = somarDias(ini, 6);
+    titulo = formatarCurta(ini) + ' a ' + formatarCurta(fim);
+  } else {
+    const meses = { mes: 1, trimestre: 3, semestre: 6, ano: 12 }[tipo];
+    const indice = Math.floor((p.m - 1) / meses) + passo; // índice do bloco dentro do ano
+    const a = p.a + Math.floor(indice * meses / 12);
+    const mIni = ((indice * meses) % 12 + 12) % 12; // 0-11
+    ini = dataLocal(new Date(a, mIni, 1));
+    fim = dataLocal(new Date(a, mIni + meses, 0));
+    if (tipo === 'mes') titulo = MESES[mIni] + ' de ' + a;
+    else if (tipo === 'trimestre') titulo = (mIni / 3 + 1) + 'º trimestre de ' + a;
+    else if (tipo === 'semestre') titulo = (mIni / 6 + 1) + 'º semestre de ' + a;
+    else titulo = String(a);
+  }
+  return { tipo: tipo, inicio: ini, fim: fim, titulo: titulo };
+}
+
+// Indicadores do período. A média diária considera só os dias com algum registro,
+// para dias sem anotação não puxarem a média para baixo.
+export function resumoPeriodo(registros, inicio, fim, limiteMg) {
+  const porDia = {};
+  const porAlimento = {};
+  registros.forEach(function (r) {
+    if (r.data < inicio || r.data > fim) return;
+    porDia[r.data] = (porDia[r.data] || 0) + (r.pheMg || 0);
+    const k = r.alimentoNome;
+    porAlimento[k] = porAlimento[k] || { nome: k, mg: 0, vezes: 0 };
+    porAlimento[k].mg += r.pheMg || 0;
+    porAlimento[k].vezes++;
+  });
+  const dias = [];
+  for (let d = inicio; d <= fim; d = somarDias(d, 1)) {
+    const tem = porDia.hasOwnProperty(d);
+    const total = tem ? arredondar(porDia[d], 1) : null;
+    dias.push({ data: d, total: total, nivel: tem ? situacaoDoDia(total, limiteMg).nivel : null });
+  }
+  const comRegistro = dias.filter(function (d) { return d.total !== null; });
+  const total = arredondar(comRegistro.reduce(function (s, d) { return s + d.total; }, 0), 1);
+  const media = comRegistro.length ? arredondar(total / comRegistro.length, 1) : null;
+  const maior = comRegistro.reduce(function (m, d) { return !m || d.total > m.total ? d : m; }, null);
+  const menor = comRegistro.reduce(function (m, d) { return !m || d.total < m.total ? d : m; }, null);
+  return {
+    dias: dias,
+    diasNoPeriodo: dias.length,
+    diasComRegistro: comRegistro.length,
+    total: total,
+    mediaDiaria: media,
+    mediaSobreLimite: media !== null && limiteMg ? arredondar(media / limiteMg * 100, 0) : null,
+    diasAcima: limiteMg ? comRegistro.filter(function (d) { return d.total > limiteMg; }).length : null,
+    diasDentro: limiteMg ? comRegistro.filter(function (d) { return d.total <= limiteMg; }).length : null,
+    maior: maior,
+    menor: menor,
+    alimentos: Object.keys(porAlimento).map(function (k) { return porAlimento[k]; })
+      .sort(function (a, b) { return b.mg - a.mg; })
+      .map(function (a) { return { nome: a.nome, mg: arredondar(a.mg, 1), vezes: a.vezes }; })
+  };
+}
+
+export { formatarCurta };

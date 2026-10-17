@@ -82,6 +82,12 @@ export function registrosDoDia(perfilId, data) {
   }).then(function (l) { return l.filter(function (i) { return !i.deleted; }); });
 }
 
+export function registrosNoPeriodo(perfilId, inicio, fim) {
+  return loja('registros').then(function (s) {
+    return pedido(s.index('perfilData').getAll(IDBKeyRange.bound([perfilId, inicio], [perfilId, fim])));
+  }).then(function (l) { return l.filter(function (i) { return !i.deleted; }); });
+}
+
 export function lerConfig(chave) {
   return loja('config').then(function (s) { return pedido(s.get(chave)); })
     .then(function (r) { return r ? r.valor : undefined; });

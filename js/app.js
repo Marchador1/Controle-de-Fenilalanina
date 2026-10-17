@@ -1,8 +1,10 @@
 import * as db from './db.js';
 import {
   REFEICOES, novoId, agoraIso, dataLocal, horaLocal, somarDias, arredondar,
-  normalizarAlimento, calcularPhe, situacaoDoDia, totalPhe, mesclar, buscarTexto, semAcento
+  normalizarAlimento, calcularPhe, situacaoDoDia, totalPhe, mesclar, buscarTexto, semAcento,
+  PERIODOS, periodo, resumoPeriodo, formatarCurta
 } from './model.js';
+import { planilhaBackup, planilhaModelo, lerPlanilha } from './planilha.js';
 import { carregarBaseAnvisa, NOMES_EXEMPLO } from './seed.js';
 
 const estado = {
@@ -86,6 +88,7 @@ function mostrarTela(id) {
     b.classList.toggle('ativa', b.getAttribute('data-tela') === id);
   });
   if (id === 'tela-hoje') renderHoje();
+  if (id === 'tela-relatorios') renderRelatorio();
   if (id === 'tela-alimentos') renderAlimentos();
   if (id === 'tela-dados') renderDados();
   window.scrollTo(0, 0);
@@ -94,17 +97,22 @@ function mostrarTela(id) {
 // ---------- Inicialização ----------
 async function iniciar() {
   await atualizarBaseAnvisa();
+  await definirPerfilAtivo(await db.lerConfig('perfilAtivo'));
+  await carregarAlimentos();
+  renderHoje();
+}
+
+// Usa o perfil pedido se ele existir; senão o primeiro, criando um se não houver nenhum.
+async function definirPerfilAtivo(id) {
   let perfis = await db.todos('perfis');
   if (!perfis.length) {
     const p = { id: novoId(), nome: 'Meu perfil', limiteMg: null, updatedAt: agoraIso(), deleted: false };
     await db.salvar('perfis', p);
     perfis = [p];
   }
-  const ativoId = await db.lerConfig('perfilAtivo');
-  estado.perfil = perfis.find(function (p) { return p.id === ativoId; }) || perfis[0];
-  await carregarAlimentos();
+  estado.perfil = perfis.find(function (p) { return p.id === id; }) || perfis[0];
+  await db.gravarConfig('perfilAtivo', estado.perfil.id);
   atualizarChipPerfil();
-  renderHoje();
 }
 
 // Carrega a base da ANVISA na primeira abertura ou quando o app traz uma versão nova.
@@ -548,8 +556,25 @@ function modalPerfil(p) {
     '<label class="campo">Nome<input id="p-nome" value="' + esc(ed.nome) + '"></label>' +
     '<label class="campo">Limite diário de fenilalanina (mg/dia)<input id="p-limite" type="number" inputmode="decimal" min="0" step="any" value="' + (ed.limiteMg || '') + '"></label>' +
     '<p class="ajuda">Use o valor indicado pelo nutricionista ou médico.</p>' +
-    '<div class="modal-rodape"><button type="button" class="btn" data-fechar>Cancelar</button>' +
+    '<div class="modal-rodape">' +
+    (p ? '<button type="button" class="btn perigo esquerda" id="p-excluir">Excluir perfil</button>' : '') +
+    '<button type="button" class="btn" data-fechar>Cancelar</button>' +
     '<button type="button" class="btn primario" id="p-salvar">Salvar</button></div>');
+  if (p) {
+    $('#p-excluir').onclick = async function () {
+      const perfis = await db.todos('perfis');
+      if (perfis.length <= 1) { toast('Este é o único perfil. Crie outro antes de excluir este.'); return; }
+      if (!confirm('Excluir o perfil "' + p.nome + '" e todo o histórico de consumo dele? Exporte a planilha antes, se quiser guardar os dados.')) return;
+      const registros = (await db.todos('registros')).filter(function (r) { return r.perfilId === p.id; });
+      const agora = agoraIso();
+      await db.salvarVarios('registros', registros.map(function (r) { return Object.assign({}, r, { deleted: true, updatedAt: agora }); }));
+      await db.excluir('perfis', p.id);
+      if (estado.perfil.id === p.id) await definirPerfilAtivo(null);
+      fecharModal();
+      toast('Perfil excluído.');
+      renderDados();
+    };
+  }
   $('#p-salvar').onclick = async function () {
     const nome = $('#p-nome').value.trim();
     if (!nome) { toast('Informe o nome do perfil.'); return; }
@@ -565,21 +590,28 @@ function modalPerfil(p) {
   };
 }
 
-// ---------- Exportar / importar backup ----------
-$('#exportar').addEventListener('click', async function () {
-  const dados = { app: 'controle-fenilalanina', versao: 1, exportadoEm: agoraIso() };
-  for (const nome of db.LOJAS) dados[nome] = await db.todosComExcluidos(nome);
-  const blob = new Blob([JSON.stringify(dados)], { type: 'application/json' });
+// ---------- Planilhas: backup, importação e modelo ----------
+function baixar(blob, nomeArquivo) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'fenilalanina-backup-' + dataLocal() + '.json';
+  link.download = nomeArquivo;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+}
+
+$('#exportar').addEventListener('click', async function () {
+  const dados = {};
+  for (const nome of db.LOJAS) dados[nome] = await db.todosComExcluidos(nome);
+  baixar(planilhaBackup(dados), 'fenilalanina-backup-' + dataLocal() + '.xlsx');
   await db.gravarConfig('ultimoBackup', agoraIso());
   renderDados();
+});
+
+$('#baixar-modelo').addEventListener('click', function () {
+  baixar(planilhaModelo(), 'modelo-alimentos-fenilalanina.xlsx');
 });
 
 $('#importar-arquivo').addEventListener('change', async function (e) {
@@ -587,24 +619,161 @@ $('#importar-arquivo').addEventListener('change', async function (e) {
   e.target.value = '';
   if (!arquivo) return;
   try {
-    const dados = JSON.parse(await arquivo.text());
-    if (dados.app !== 'controle-fenilalanina') throw new Error('Este arquivo não é um backup deste app.');
+    let dados;
+    let erros = [];
+    if (/\.json$/i.test(arquivo.name)) {
+      // Backups da primeira versão do app.
+      dados = JSON.parse(await arquivo.text());
+      if (dados.app !== 'controle-fenilalanina') throw new Error('Este arquivo não é um backup deste app.');
+    } else {
+      dados = await lerPlanilha(await arquivo.arrayBuffer(), await db.todosComExcluidos('alimentos'));
+      erros = dados.erros;
+    }
     const resumo = [];
     for (const nome of db.LOJAS) {
-      const r = mesclar(await db.todosComExcluidos(nome), Array.isArray(dados[nome]) ? dados[nome] : []);
+      const itens = Array.isArray(dados[nome]) ? dados[nome] : [];
+      if (!itens.length) continue;
+      const r = mesclar(await db.todosComExcluidos(nome), itens);
       await db.salvarVarios(nome, r.itens);
       resumo.push(nome + ': ' + r.novos + ' novos, ' + r.atualizados + ' atualizados');
     }
     await carregarAlimentos();
-    const perfis = await db.todos('perfis');
-    estado.perfil = perfis.find(function (p) { return p.id === estado.perfil.id; }) || perfis[0];
-    atualizarChipPerfil();
+    await definirPerfilAtivo(estado.perfil.id);
     renderDados();
-    toast('Importado. ' + resumo.join(' · '));
+    abrirModal('Importação concluída',
+      '<p>' + (resumo.length ? esc(resumo.join(' · ')) : 'Nada novo para importar.') + '</p>' +
+      (erros.length ? '<p class="ajuda">' + erros.length + ' linha(s) ignorada(s):</p><ul class="ajuda">' +
+        erros.slice(0, 20).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="modal-rodape"><button type="button" class="btn primario" data-fechar>OK</button></div>');
   } catch (err) {
     toast('Não foi possível importar: ' + err.message);
   }
 });
+
+// ---------- Relatórios ----------
+const relatorio = { tipo: 'semana', passo: 0 };
+
+$('#tipos-periodo').innerHTML = Object.keys(PERIODOS).map(function (k) {
+  return '<button type="button" role="tab" data-periodo="' + k + '">' + PERIODOS[k] + '</button>';
+}).join('');
+$('#tipos-periodo').querySelectorAll('[data-periodo]').forEach(function (b) {
+  b.onclick = function () { relatorio.tipo = b.getAttribute('data-periodo'); relatorio.passo = 0; renderRelatorio(); };
+});
+$('#periodo-anterior').addEventListener('click', function () { relatorio.passo--; renderRelatorio(); });
+$('#periodo-seguinte').addEventListener('click', function () { relatorio.passo++; renderRelatorio(); });
+$('#gerar-pdf').addEventListener('click', function () {
+  toast('Na janela de impressão, escolha "Salvar como PDF".');
+  setTimeout(function () { window.print(); }, 300);
+});
+
+const NIVEL_TEXTO = { ok: 'Dentro do limite', atencao: 'Perto do limite', acima: 'Acima do limite', 'sem-limite': 'Sem limite' };
+
+async function renderRelatorio() {
+  const per = periodo(relatorio.tipo, dataLocal(), relatorio.passo);
+  const limite = estado.perfil.limiteMg;
+  const registros = await db.registrosNoPeriodo(estado.perfil.id, per.inicio, per.fim);
+  const r = resumoPeriodo(registros, per.inicio, per.fim, limite);
+
+  $('#tipos-periodo').querySelectorAll('[data-periodo]').forEach(function (b) {
+    const ativo = b.getAttribute('data-periodo') === relatorio.tipo;
+    b.classList.toggle('ativa', ativo);
+    b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+  });
+  $('#periodo-titulo').textContent = per.titulo.charAt(0).toUpperCase() + per.titulo.slice(1);
+  $('#periodo-seguinte').disabled = per.fim >= dataLocal();
+  $('#cabecalho-impressao').innerHTML = '<h1>Relatório de consumo de fenilalanina</h1>' +
+    '<p>Perfil: <strong>' + esc(estado.perfil.nome) + '</strong> · Período: ' + esc(per.titulo) +
+    ' (' + formatarCurta(per.inicio) + ' a ' + formatarCurta(per.fim) + ')' +
+    (limite ? ' · Limite diário: ' + fmt(limite) + ' mg' : '') + '<br>Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>';
+
+  if (!r.diasComRegistro) {
+    $('#relatorio').innerHTML = '<div class="cartao"><p class="vazio">Nenhum consumo registrado neste período.</p></div>';
+    return;
+  }
+
+  function indicador(rotulo, valor, sub, classe) {
+    return '<div class="indicador' + (classe ? ' ' + classe : '') + '"><span class="rotulo">' + rotulo + '</span><strong>' + valor + '</strong>' +
+      (sub ? '<span class="detalhe">' + sub + '</span>' : '') + '</div>';
+  }
+  const nivelMedia = limite ? situacaoDoDia(r.mediaDiaria, limite).nivel : 'sem-limite';
+  const indicadores = '<div class="indicadores">' +
+    indicador('Média diária', fmt(r.mediaDiaria) + ' mg',
+      limite ? r.mediaSobreLimite + '% do limite · ' + NIVEL_TEXTO[nivelMedia] : 'defina um limite no perfil', 'nivel-' + nivelMedia) +
+    indicador('Dias registrados', r.diasComRegistro + ' de ' + r.diasNoPeriodo, 'a média considera só esses dias') +
+    (limite ? indicador('Dias acima do limite', String(r.diasAcima), r.diasDentro + ' dia(s) dentro do limite', r.diasAcima ? 'nivel-acima' : '') : '') +
+    indicador('Maior consumo', fmt(r.maior.total) + ' mg', formatarCurta(r.maior.data)) +
+    indicador('Menor consumo', fmt(r.menor.total) + ' mg', formatarCurta(r.menor.data)) +
+    indicador('Total no período', fmt(r.total) + ' mg', '') +
+    '</div>';
+
+  const tabelaDias = r.dias.filter(function (d) { return d.total !== null; }).map(function (d) {
+    return '<tr><td>' + formatarCurta(d.data) + '</td><td class="num">' + fmt(d.total) + '</td>' +
+      '<td>' + (limite ? '<span class="ponto nivel-' + d.nivel + '"></span>' + NIVEL_TEXTO[d.nivel] : '–') + '</td></tr>';
+  }).join('');
+  const tabelaAlimentos = r.alimentos.slice(0, 10).map(function (a) {
+    return '<tr><td>' + esc(a.nome) + '</td><td class="num">' + a.vezes + '</td><td class="num">' + fmt(a.mg) + '</td>' +
+      '<td class="num">' + (r.total ? Math.round(a.mg / r.total * 100) : 0) + '%</td></tr>';
+  }).join('');
+
+  $('#relatorio').innerHTML = indicadores +
+    '<div class="cartao"><h2>Consumo por ' + (r.dias.length <= 92 ? 'dia' : 'mês') + '</h2>' + grafico(r, limite) + '</div>' +
+    '<div class="cartao"><h2>Alimentos que mais contribuíram</h2><table class="tabela"><thead><tr><th>Alimento</th><th class="num">Vezes</th><th class="num">mg</th><th class="num">%</th></tr></thead><tbody>' +
+    tabelaAlimentos + '</tbody></table></div>' +
+    '<div class="cartao"><h2>Dias registrados</h2><table class="tabela"><thead><tr><th>Data</th><th class="num">mg</th><th>Situação</th></tr></thead><tbody>' +
+    tabelaDias + '</tbody></table></div>';
+}
+
+// Barras por dia (ou média por mês em períodos longos), coloridas pela situação, com a linha do limite.
+// A largura do desenho acompanha a da tela, para os textos do eixo terem sempre o mesmo tamanho.
+function grafico(r, limite) {
+  let barras;
+  if (r.dias.length <= 92) {
+    barras = r.dias.map(function (d) {
+      return { rotulo: d.data.slice(8) + '/' + d.data.slice(5, 7), valor: d.total, nivel: d.nivel, dica: formatarCurta(d.data) };
+    });
+  } else {
+    const meses = {};
+    r.dias.forEach(function (d) {
+      const k = d.data.slice(0, 7);
+      meses[k] = meses[k] || { soma: 0, n: 0 };
+      if (d.total !== null) { meses[k].soma += d.total; meses[k].n++; }
+    });
+    barras = Object.keys(meses).map(function (k) {
+      const m = meses[k];
+      const v = m.n ? arredondar(m.soma / m.n, 1) : null;
+      return { rotulo: k.slice(5) + '/' + k.slice(2, 4), valor: v, nivel: v === null ? null : situacaoDoDia(v, limite).nivel, dica: 'Média de ' + k.slice(5) + '/' + k.slice(0, 4) };
+    });
+  }
+  const max = Math.max(limite || 0, Math.max.apply(null, barras.map(function (b) { return b.valor || 0; }))) * 1.1 || 1;
+  const L = Math.max(320, Math.min(900, ($('#relatorio').clientWidth || 400) - 34)), A = 210, topo = 10, base = 184, esq = 34;
+  const largura = (L - esq) / barras.length;
+  const y = function (v) { return base - (v / max) * (base - topo); };
+  const passoRotulo = Math.ceil(barras.length / Math.floor(L / 55));
+  let svg = '<svg viewBox="0 0 ' + L + ' ' + A + '" class="grafico" role="img" aria-label="Consumo de fenilalanina por ' + (r.dias.length <= 92 ? 'dia' : 'mês') + '">';
+  [0, 0.5, 1].forEach(function (f) {
+    const v = max / 1.1 * f;
+    svg += '<line x1="' + esq + '" x2="' + L + '" y1="' + y(v) + '" y2="' + y(v) + '" class="grade"/>' +
+      '<text x="' + (esq - 4) + '" y="' + (y(v) + 4) + '" class="eixo" text-anchor="end">' + Math.round(v) + '</text>';
+  });
+  barras.forEach(function (b, i) {
+    const x = esq + i * largura;
+    if (b.valor !== null) {
+      const h = Math.max(base - y(b.valor), 1);
+      const w = Math.max(largura - 2, 1);
+      svg += '<rect x="' + (x + 1) + '" y="' + (base - h) + '" width="' + w + '" height="' + h + '" rx="' + Math.min(4, w / 2) + '" class="barra-' + (b.nivel || 'ok') + '">' +
+        '<title>' + b.dica + ': ' + fmt(b.valor) + ' mg' + (limite ? ' (' + NIVEL_TEXTO[b.nivel] + ')' : '') + '</title></rect>';
+    }
+    if (i % passoRotulo === 0) {
+      svg += '<text x="' + (x + largura / 2) + '" y="' + (base + 16) + '" class="eixo" text-anchor="middle">' + b.rotulo + '</text>';
+    }
+  });
+  if (limite) {
+    svg += '<line x1="' + esq + '" x2="' + L + '" y1="' + y(limite) + '" y2="' + y(limite) + '" class="linha-limite"/>';
+  }
+  svg += '</svg>';
+  const legenda = limite ? '<div class="legenda"><span><i class="ponto nivel-ok"></i>Dentro</span><span><i class="ponto nivel-atencao"></i>Perto (80% ou mais)</span><span><i class="ponto nivel-acima"></i>Acima</span><span><i class="traco"></i>Limite (' + fmt(limite) + ' mg)</span></div>' : '';
+  return svg + legenda + (r.dias.length > 92 ? '<p class="ajuda">Períodos longos mostram a média diária de cada mês.</p>' : '');
+}
 
 // ---------- Offline ----------
 if ('serviceWorker' in navigator) {
