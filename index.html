@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Controle de Fenilalanina</title>
+  <meta name="description" content="Registro diário de fenilalanina (Phe) com base de alimentos, funciona offline.">
+  <meta name="theme-color" content="#1f6f5c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Phe">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topo">
+    <h1>Controle de Phe</h1>
+    <button id="perfil-atual" class="perfil-chip" type="button" aria-label="Trocar perfil"></button>
+  </header>
+
+  <main>
+    <!-- Tela: consumo do dia -->
+    <section id="tela-hoje" class="tela ativa" aria-label="Consumo do dia">
+      <div class="navegar-dia">
+        <button type="button" id="dia-anterior" class="btn-icone" aria-label="Dia anterior">‹</button>
+        <button type="button" id="dia-titulo" class="dia-titulo"></button>
+        <button type="button" id="dia-seguinte" class="btn-icone" aria-label="Dia seguinte">›</button>
+      </div>
+
+      <div class="painel-limite" id="painel-limite">
+        <div class="numeros">
+          <div><span class="rotulo">Consumido</span><strong id="total-dia">0</strong> mg</div>
+          <div><span class="rotulo">Restante</span><strong id="restante-dia">–</strong> mg</div>
+        </div>
+        <div class="barra" role="progressbar" aria-valuemin="0" id="barra">
+          <div class="barra-preenchida" id="barra-preenchida"></div>
+        </div>
+        <p class="limite-texto" id="limite-texto"></p>
+      </div>
+
+      <div id="lista-refeicoes"></div>
+    </section>
+
+    <!-- Tela: base de alimentos -->
+    <section id="tela-alimentos" class="tela" aria-label="Base de alimentos">
+      <div class="barra-busca">
+        <input type="search" id="busca-alimentos" placeholder="Buscar alimento, marca ou categoria" aria-label="Buscar alimento">
+        <button type="button" class="btn primario" id="novo-alimento">+ Novo</button>
+      </div>
+      <ul class="lista" id="lista-alimentos"></ul>
+    </section>
+
+    <!-- Tela: perfil e dados -->
+    <section id="tela-dados" class="tela" aria-label="Perfil e dados">
+      <div class="cartao">
+        <h2>Perfis</h2>
+        <p class="ajuda">O limite diário deve ser o definido pelo nutricionista ou médico.</p>
+        <ul class="lista" id="lista-perfis"></ul>
+        <button type="button" class="btn" id="novo-perfil">+ Adicionar perfil</button>
+      </div>
+      <div class="cartao">
+        <h2>Backup e sincronização</h2>
+        <p class="ajuda">Os dados ficam só neste aparelho. Para levar ao PC ou a outro celular, exporte o arquivo e importe no outro aparelho. A importação mescla as bases e mantém a versão mais recente de cada item.</p>
+        <div class="acoes">
+          <button type="button" class="btn primario" id="exportar">Exportar backup</button>
+          <label class="btn" for="importar-arquivo">Importar backup</label>
+          <input type="file" id="importar-arquivo" accept=".json,application/json" hidden>
+        </div>
+        <p class="ajuda" id="ultimo-backup"></p>
+      </div>
+    </section>
+  </main>
+
+  <p class="aviso">Este app é um apoio e não substitui a orientação da equipe de saúde.</p>
+
+  <nav class="abas" aria-label="Telas">
+    <button type="button" data-tela="tela-hoje" class="ativa">Hoje</button>
+    <button type="button" data-tela="tela-alimentos">Alimentos</button>
+    <button type="button" data-tela="tela-dados">Perfil e dados</button>
+  </nav>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <h2 id="modal-titulo"></h2>
+      <div id="modal-corpo"></div>
+    </div>
+  </div>
+
+  <div id="aviso-toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
