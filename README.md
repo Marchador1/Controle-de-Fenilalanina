@@ -24,7 +24,19 @@ npm test
 - **Alimentos:** cadastrar, editar, excluir e favoritar. Sem o teor de Phe, o app estima pela proteína (× 50 mg/g) e marca como estimado.
 - **Perfil e dados:** vários perfis com limite diário próprio; exportar e importar backup em JSON com mesclagem pela data de alteração (vale a versão mais recente de cada item; exclusões também são levadas).
 
-A base inicial tem 14 alimentos de exemplo com teor **estimado** pela proteína, só para teste. Ela deve ser trocada pela tabela da ANVISA ou por valores de rótulo.
+## Base pré-cadastrada (ANVISA)
+
+A base inicial vem do painel público da ANVISA "Conteúdo de fenilalanina em alimentos": cerca de 3.060 produtos com categoria, nome, marca e quantidade máxima de fenilalanina (mg/100 g). O arquivo fica em `data/anvisa.json` e é carregado na primeira abertura do app.
+
+Para atualizar com a versão mais nova do painel:
+
+```bash
+node tools/importar-anvisa.mjs
+```
+
+O script unifica grafias diferentes de categoria, corrige linhas com categoria e nome trocados e dá a cada item um id fixo, igual em todos os aparelhos, para a sincronização não duplicar a base. Quando o app recebe uma base nova, só entram os itens que o aparelho ainda não tem; edições e exclusões feitas pelo usuário são mantidas.
+
+A tabela é voltada a produtos industrializados e alimentos in natura de baixo teor. Itens como feijão e ovo não aparecem nela e podem ser cadastrados pelo usuário.
 
 ## Estrutura
 
@@ -34,9 +46,9 @@ A base inicial tem 14 alimentos de exemplo com teor **estimado** pela proteína,
 | `js/app.js` | Interface |
 | `js/model.js` | Regras puras: cálculo de mg, estimativa, situação do dia, mesclagem |
 | `js/db.js` | IndexedDB (alimentos, registros, perfis, config) |
-| `js/seed.js` | Base de exemplo |
+| `js/seed.js`, `data/anvisa.json` | Base pré-cadastrada da ANVISA |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Instalação e funcionamento offline |
-| `tools/serve.mjs` | Servidor local; `tools/make-icons.mjs` gera os PNG |
+| `tools/serve.mjs` | Servidor local; `tools/make-icons.mjs` gera os PNG; `tools/importar-anvisa.mjs` baixa a base |
 
 ## Modelo de dados
 

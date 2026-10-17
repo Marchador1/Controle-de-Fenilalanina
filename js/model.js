@@ -4,7 +4,7 @@
 export const PHE_POR_G_PROTEINA = 50;
 
 export const FONTES = {
-  tabela: 'Tabela oficial',
+  tabela: 'Tabela oficial (ANVISA)',
   rotulo: 'Rótulo',
   estimativa: 'Estimativa (proteína × 50)'
 };

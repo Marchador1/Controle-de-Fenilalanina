@@ -3,13 +3,40 @@ import {
   REFEICOES, FONTES, novoId, agoraIso, dataLocal, horaLocal, somarDias, arredondar,
   normalizarAlimento, calcularPhe, situacaoDoDia, totalPhe, mesclar, buscarTexto, semAcento
 } from './model.js';
-import { alimentosIniciais } from './seed.js';
+import { carregarBaseAnvisa, NOMES_EXEMPLO } from './seed.js';
 
 const estado = {
   perfil: null,
   data: dataLocal(),
-  alimentos: []
+  alimentos: [],
+  textoBusca: {}
 };
+
+// Listas longas ficam lentas em celulares antigos: mostra só as primeiras e pede para refinar a busca.
+const MAX_LISTA = 100;
+
+// Busca por todas as palavras digitadas; nomes que começam com o termo aparecem primeiro.
+function encontrar(termo) {
+  if (!termo) return estado.alimentos;
+  const palavras = termo.split(/\s+/);
+  return estado.alimentos.filter(function (a) {
+    const t = estado.textoBusca[a.id];
+    return palavras.every(function (p) { return t.indexOf(p) >= 0; });
+  }).map(function (a, i) {
+    const nome = semAcento(a.nome.toLowerCase());
+    return { a: a, peso: nome.indexOf(termo) === 0 ? 0 : nome.indexOf(termo) > 0 ? 1 : 2, i: i };
+  }).sort(function (x, y) { return x.peso - y.peso || x.i - y.i; }).map(function (x) { return x.a; });
+}
+
+function categoriaCurta(c) {
+  return (c || '').split(' (')[0];
+}
+
+function avisoLimite(total) {
+  return total > MAX_LISTA
+    ? '<li class="vazio">Mostrando ' + MAX_LISTA + ' de ' + total.toLocaleString('pt-BR') + '. Digite na busca para refinar.</li>'
+    : '';
+}
 
 const $ = function (sel) { return document.querySelector(sel); };
 
@@ -66,10 +93,7 @@ function mostrarTela(id) {
 
 // ---------- Inicialização ----------
 async function iniciar() {
-  if (!(await db.lerConfig('semeado'))) {
-    await db.salvarVarios('alimentos', alimentosIniciais());
-    await db.gravarConfig('semeado', true);
-  }
+  await atualizarBaseAnvisa();
   let perfis = await db.todos('perfis');
   if (!perfis.length) {
     const p = { id: novoId(), nome: 'Meu perfil', limiteMg: null, updatedAt: agoraIso(), deleted: false };
@@ -83,10 +107,34 @@ async function iniciar() {
   renderHoje();
 }
 
+// Carrega a base da ANVISA na primeira abertura ou quando o app traz uma versão nova.
+// Só entram itens que o aparelho ainda não tem, para não desfazer edições e exclusões do usuário.
+async function atualizarBaseAnvisa() {
+  let base;
+  try {
+    base = await carregarBaseAnvisa();
+  } catch (e) {
+    console.warn(e);
+    return;
+  }
+  if ((await db.lerConfig('versaoBaseAnvisa')) === base.versao) return;
+  const existentes = {};
+  (await db.todosComExcluidos('alimentos')).forEach(function (a) { existentes[a.id] = a; });
+  const novos = base.alimentos.filter(function (a) { return !existentes[a.id]; });
+  // Remove os exemplos estimados da primeira versão do app.
+  const exemplos = Object.keys(existentes).map(function (id) { return existentes[id]; }).filter(function (a) {
+    return !a.deleted && a.fonte === 'estimativa' && NOMES_EXEMPLO.indexOf(a.nome) >= 0;
+  }).map(function (a) { return Object.assign({}, a, { deleted: true, updatedAt: agoraIso() }); });
+  await db.salvarVarios('alimentos', novos.concat(exemplos));
+  await db.gravarConfig('versaoBaseAnvisa', base.versao);
+}
+
 async function carregarAlimentos() {
   estado.alimentos = (await db.todos('alimentos')).sort(function (a, b) {
     return a.nome.localeCompare(b.nome, 'pt-BR');
   });
+  estado.textoBusca = {};
+  estado.alimentos.forEach(function (a) { estado.textoBusca[a.id] = buscarTexto(a); });
 }
 
 function atualizarChipPerfil() {
@@ -240,7 +288,7 @@ async function modalRegistro(registro, refeicaoPadrao) {
 
   function itemLista(a) {
     return '<li class="clicavel" data-id="' + a.id + '"><div class="info"><div class="nome">' + esc(a.nome) +
-      (a.favorito ? ' ★' : '') + '</div><div class="detalhe">' + esc([a.marca, a.categoria].filter(Boolean).join(' · ')) + '</div></div>' +
+      (a.favorito ? ' ★' : '') + '</div><div class="detalhe">' + esc([a.marca, categoriaCurta(a.categoria)].filter(Boolean).join(' · ')) + '</div></div>' +
       '<div class="valor">' + fmt(a.pheMg100) + ' mg/100 g</div></li>';
   }
 
@@ -253,10 +301,11 @@ async function modalRegistro(registro, refeicaoPadrao) {
         .filter(function (a) { return a && !a.favorito; });
       if (fav.length) html += '<li class="secao-titulo">Favoritos</li>' + fav.map(itemLista).join('');
       if (rec.length) html += '<li class="secao-titulo">Recentes</li>' + rec.map(itemLista).join('');
-      html += '<li class="secao-titulo">Todos</li>' + estado.alimentos.map(itemLista).join('');
+      html += '<li class="secao-titulo">Todos</li>' + estado.alimentos.slice(0, MAX_LISTA).map(itemLista).join('') +
+        avisoLimite(estado.alimentos.length);
     } else {
-      const achados = estado.alimentos.filter(function (a) { return buscarTexto(a).indexOf(termo) >= 0; });
-      html = achados.length ? achados.map(itemLista).join('')
+      const achados = encontrar(termo);
+      html = achados.length ? achados.slice(0, MAX_LISTA).map(itemLista).join('') + avisoLimite(achados.length)
         : '<li class="vazio">Nenhum alimento encontrado. Cadastre-o na tela Alimentos.</li>';
     }
     $('#f-resultados').innerHTML = html;
@@ -355,16 +404,16 @@ $('#novo-alimento').addEventListener('click', function () { modalAlimento(null);
 
 function renderAlimentos() {
   const termo = semAcento($('#busca-alimentos').value.trim().toLowerCase());
-  const lista = estado.alimentos.filter(function (a) { return !termo || buscarTexto(a).indexOf(termo) >= 0; });
-  $('#lista-alimentos').innerHTML = lista.length ? lista.map(function (a) {
+  const lista = encontrar(termo);
+  $('#lista-alimentos').innerHTML = lista.length ? lista.slice(0, MAX_LISTA).map(function (a) {
     return '<li><button type="button" class="estrela" data-fav="' + a.id + '" aria-label="' + (a.favorito ? 'Remover dos favoritos' : 'Favoritar') + '">' +
       (a.favorito ? '★' : '☆') + '</button>' +
       '<div class="info clicavel" data-editar="' + a.id + '"><div class="nome">' + esc(a.nome) + '</div>' +
-      '<div class="detalhe">' + esc([a.marca, a.categoria].filter(Boolean).join(' · ')) +
+      '<div class="detalhe">' + esc([a.marca, categoriaCurta(a.categoria)].filter(Boolean).join(' · ')) +
       (a.porcaoG ? ' · ' + esc(a.porcaoNome || 'porção') + ' = ' + fmt(a.porcaoG) + ' g' : '') + ' ' +
-      '<span class="selo' + (a.fonte === 'estimativa' ? ' estimativa' : '') + '">' + esc(a.fonte === 'estimativa' ? 'estimado' : FONTES[a.fonte]) + '</span></div></div>' +
+      (a.fonte === 'tabela' ? '' : '<span class="selo' + (a.fonte === 'estimativa' ? ' estimativa' : '') + '">' + (a.fonte === 'estimativa' ? 'estimado' : 'rótulo') + '</span>') + '</div></div>' +
       '<div class="valor">' + fmt(a.pheMg100) + '<span class="detalhe"> mg/100 g</span></div></li>';
-  }).join('') : '<li class="vazio">Nenhum alimento encontrado.</li>';
+  }).join('') + avisoLimite(lista.length) : '<li class="vazio">Nenhum alimento encontrado.</li>';
 
   $('#lista-alimentos').querySelectorAll('[data-editar]').forEach(function (el) {
     el.onclick = function () { modalAlimento(estado.alimentos.find(function (a) { return a.id === el.getAttribute('data-editar'); })); };
